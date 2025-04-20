@@ -1,0 +1,29 @@
+*{
+    box-sizing: border-box;
+}
+
+nav{
+    display: flex;
+    align-items: center;
+    gap: 10rem;
+    padding: 0 2rem;
+    width: 100%;
+}
+nav a{
+    text-decoration: none;
+}
+
+nav li:hover{
+    background-color: rgb(209, 107, 107);
+}
+.site-title{
+    font-size: 3.5rem;
+}
+ul{
+    display: flex;
+    justify-content: space-between;
+    gap: 3rem;
+}
+li{
+    list-style: none;
+}
