@@ -1,0 +1,8 @@
+button{
+    border-radius: 100px;
+    display: flex;
+    margin-left: 2rem;
+    align-items: center;
+    gap: 1rem;
+    color: inherit;
+}

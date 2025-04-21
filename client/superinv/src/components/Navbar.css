@@ -1,5 +1,6 @@
 *{
     box-sizing: border-box;
+
 }
 
 nav{
@@ -11,10 +12,12 @@ nav{
 }
 nav a{
     text-decoration: none;
+    
 }
 
 nav li:hover{
     background-color: rgb(209, 107, 107);
+
 }
 .site-title{
     font-size: 3.5rem;

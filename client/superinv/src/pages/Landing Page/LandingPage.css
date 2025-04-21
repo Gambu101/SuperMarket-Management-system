@@ -1,0 +1,17 @@
+body{
+    color: rgb(100,108,255);
+}
+.buttons{
+    display: flex;
+    justify-content: center;
+    margin: 10rem;
+}
+button{
+    border-radius: 100px;
+    height: 5rem;
+    width: 10rem;
+    justify-content: center;
+    background-color: rgb(100,108,255);
+    /* opacity: 0.5; */
+    color: black;
+}
