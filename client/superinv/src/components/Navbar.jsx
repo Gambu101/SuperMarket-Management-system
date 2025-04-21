@@ -6,7 +6,7 @@ import { Route, Routes } from 'react-router-dom'
 export default function Navbar() {
   return (
     <nav className="nav">
-      <Link to="/" className="site-title">SuperInv</Link>
+      <Link to="/home" className="site-title">SuperInv</Link>
       <ul>
         <li>
             <Link to="/home">Home</Link>
