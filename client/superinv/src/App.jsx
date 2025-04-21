@@ -19,6 +19,15 @@ function App() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/sale" element={<Sale />} />
       </Routes>
+        <BackButton/>
+        <Home/>
+
+        <Routes>
+          <Route path="/home" element={<Home />}/>
+          <Route path="/inventory" element={<Inventory />}/>
+          <Route path="/transactions" element={<Transactions />}/>
+          <Route path="/sale" element={<Sale />}/>
+        </Routes>
     </>
   );
 }
