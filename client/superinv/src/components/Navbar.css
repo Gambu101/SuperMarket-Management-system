@@ -16,8 +16,8 @@ nav a{
 }
 
 nav li:hover{
-    background-color: rgb(209, 107, 107);
-
+    background-color: rgb(100,108,150);
+    text-emphasis-color: black;
 }
 .site-title{
     font-size: 3.5rem;

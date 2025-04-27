@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import "./LandingPage.css";
 
 export default function LandingPage() {
@@ -6,8 +7,12 @@ export default function LandingPage() {
       <h1>SuperInv</h1>
       <h2>Manage your Sales, Inventory, and Customers in one place</h2>
       <div className="buttons">
-        <button>Sign In</button>
-        <button>Sign Up</button>
+        <Link to={"/signin"}>
+          <button>Sign In</button>
+        </Link>
+        <Link to={"/signup"}>
+          <button>Sign Up</button>
+        </Link>
       </div>
     </>
   );
