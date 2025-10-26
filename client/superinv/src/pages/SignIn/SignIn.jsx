@@ -1,59 +1,56 @@
 import React, { useState } from "react";
 import "./SignIn.css";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 export default function SignIn() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
-//   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevState) => ({
-      ...prevState,
-      [name]: value,
-    }));
+    setFormData((prevState) => ({ ...prevState, [name]: value }));
   };
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (
-      formData.username === "" ||
-      formData.email === "" ||
-      formData.password === ""
-    ) {
-      setError(true);
-    } else {
-    //   setSubmitted(true);
-      setError(false);
+    if (formData.email === "" || formData.password === "") {
+      setError("Please enter all fields");
+      return;
     }
-    // Handle form submission logic here (e.g., API call)
-    console.log(formData);
+    setLoading(true);
+    try {
+      const response = await axios.post("/api/signin", formData);
+      setError("");
+      console.log("Sign-in successful:", response.data);
+      navigate("/sales");
+    } catch (error) {
+      setError(error.response.data.error || "Invalid email or password");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const errorMessage = () => {
     return (
       <div
         className="error"
-        style={{
-          display: error ? "" : "none",
-        }}
+        style={{ display: error ? "block" : "none" }}
       >
-        <h1>Please enter all the fields</h1>
+        <p>{error}</p>
       </div>
     );
   };
+
   return (
     <div className="signup-container">
-      {/* Calling to the methods that should happen after */}
-      <div className="messages">
-        {errorMessage()}
-
-      </div>
-
+      <div className="messages">{errorMessage()}</div>
       <h2>Sign in below</h2>
-
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="email">Email:</label>
@@ -77,7 +74,9 @@ export default function SignIn() {
             required
           />
         </div>
-        <button type="submit">Sign Up</button>
+        <button type="submit" disabled={loading}>
+          {loading ? "Signing in..." : "Sign In"}
+        </button>
       </form>
     </div>
   );

@@ -1,155 +1,146 @@
 import React, { useState } from "react";
+import axios from "axios";
 import "./SignUp.css";
 import BackButton from "../../components/BackButton";
+import { useNavigate } from 'react-router'; // Import useNavigate
 
 function SignUp() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: "",
+    firstname: "",
+    lastname: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
 
-  // States for checking the errors
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(false);
-  const [confirmPassword,setConfirmedPassword] = useState(false)
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevState) => ({
-      ...prevState,
-      [name]: value,
-    }));
+    setFormData((prevState) => ({ ...prevState, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
+
     e.preventDefault();
-    if (
-      formData.username === "" ||
-      formData.email === "" ||
-      formData.password === ""
-    ) {
-      setError(true);
-    }if(formData.password === formData.confirmPassword && formData.username !== "" &&
-        formData.email !== "" &&
-        formData.password !== ""){
-        setConfirmedPassword(false)
-        setSubmitted(true)
-    }if(formData.password !== formData.confirmPassword){
-        setConfirmedPassword(true)
-        setSubmitted(false)
+    try {
+      if (formData.password !== formData.confirmPassword) {
+        setError(window.alert("⚠ Passwords do not match"));
+        return;
+      }
+      if (
+        !formData.username ||
+        !formData.firstname ||
+        !formData.lastname ||
+        !formData.email ||
+        !formData.password
+      ) {
+        setError("Please fill in all fields");
+        return;
+      }
+      await axios.post("/api/signup", formData);
+      setSuccess(true);
+      setError(null);
+      window.alert('USER REGISTERED SUCCESSFULLY, PROCEED TO SIGN IN')
+      navigate ('/signin')
+    } catch (error) {
+      setError(error.response.data.error);
+      setSuccess(false);
     }
-    else {
-      setSubmitted(true);
-      setError(false);
-    }
-    // Handle form submission logic here (e.g., API call)
-    console.log(formData);
-  };
-
-  // Showing success message
-  const successMessage = () => {
-    return (
-      <div
-        className="success"
-        style={{
-          display: submitted ? "" : "none",
-        }}
-      >
-        <h1>User {formData.username} successfully registered!!</h1>
-      </div>
-    );
-  };
-
-  // Showing error message if error is true
-  const errorMessage = () => {
-    return (
-      <div
-        className="error"
-        style={{
-          display: error ? "" : "none",
-        }}
-      >
-        <h1>Please enter all the fields</h1>
-      </div>
-    );
-  };
-  const errorPasswordMessage = () => {
-    return (
-      <div
-        className="error"
-        style={{
-          display: confirmPassword ? "" : "none",
-        }}
-      >
-        <h1>Passwords don't match</h1>
-      </div>
-    );
+    
+    
   };
 
   return (
     <>
-    <BackButton/>
-    <div className="signup-container">
-      
-
-      {/* Calling to the methods */}
-      <div className="messages">
-        {errorMessage()}
-        {successMessage()}
-        {errorPasswordMessage()}
+      <BackButton />
+      <div className="signup-container">
+        {error && <div className="error">{error}</div>}
+        {success && (
+          <div className="success">User registered successfully!</div>
+        )}
+        <h2>Fill your details below and click on submit to sign up</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="username">Username:</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              minLength={3}
+              onChange={handleChange}
+              placeholder="username"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="firstname">First name:</label>
+            <input
+              type="text"
+              id="firstname"
+              name="firstname"
+              value={formData.firstname}
+              onChange={handleChange}
+              placeholder="firstname"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="lastname">Last name:</label>
+            <input
+              type="text"
+              id="lastname"
+              name="lastname"
+              value={formData.lastname}
+              onChange={handleChange}
+              placeholder="lastname"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="email">Email:</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="email address"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="password">Password:</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              minLength={6}
+              onChange={handleChange}
+              placeholder="password"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="confirmPassword">Confirm Password:</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              placeholder="confirm password"
+              required
+            />
+          </div>
+          <button type="submit">Sign Up</button>
+        </form>
       </div>
-
-      <h2>Fill your details below and submit to sign up</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="username">Username:</label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="email">Email:</label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="password">Password:</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="confirmPassword">Confirm Password:</label>
-          <input
-            type="password"
-            id="confirmPassword"
-            name="confirmPassword"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <button type="submit">Sign Up</button>
-      </form>
-    </div>
     </>
   );
 }
