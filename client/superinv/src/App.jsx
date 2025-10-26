@@ -6,21 +6,31 @@ import Transactions from "./pages/Transactions/Transactions";
 import Sale from "./pages/Sale/Sale";
 import LandingPage from "./pages/Landing Page/LandingPage";
 import SignUp from "./pages/SignUp/SignUp";
-import Navbar from './components/Navbar'
+import Navbar from "./components/Navbar";
 import SignIn from "./pages/SignIn/SignIn";
+import ProtectedRoute from "./pages/ProtectedRoute";
 
 function App() {
   return (
     <>
-      <Navbar/>
+      <Navbar />
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/home" element={<Home />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/transactions" element={<Transactions />} />
-        <Route path="/sale" element={<Sale />} />
-        <Route path="/signup" element={<SignUp/>}/>
-        <Route path="/signin" element={<SignIn/>}/>
+        <Route
+          path="/sales"
+          element={
+            isAuthenticated ? (
+              <Sales />
+            ) : (
+              <Navigate to="/signin" replace />
+            )
+          }
+        />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="/signin" element={<SignIn />} />
       </Routes>
     </>
   );
