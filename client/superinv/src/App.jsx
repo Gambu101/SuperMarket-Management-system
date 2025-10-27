@@ -20,13 +20,11 @@ function App() {
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route
-          path="/sales"
+          path="/sale"
           element={
-            isAuthenticated ? (
-              <Sales />
-            ) : (
-              <Navigate to="/signin" replace />
-            )
+            <ProtectedRoute>
+              <Sale />
+            </ProtectedRoute>
           }
         />
         <Route path="/signup" element={<SignUp />} />

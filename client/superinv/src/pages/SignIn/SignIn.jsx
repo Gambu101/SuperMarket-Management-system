@@ -28,9 +28,9 @@ export default function SignIn() {
       const response = await axios.post("/api/signin", formData);
       setError("");
       console.log("Sign-in successful:", response.data);
-      navigate("/sale");
+      navigate("/home");
     } catch (error) {
-      setError(error.response.data.error || "Invalid email or password");
+      setError(error.response.data.error || "⚠ Invalid email or password");
     } finally {
       setLoading(false);
     }

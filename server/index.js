@@ -1,35 +1,51 @@
+require('dotenv').config();
 const express = require("express");
-// const mysql2 = require("mysql2");
 const cors = require("cors");
 const app = express();
 const bcrypt = require('bcrypt');
 app.use(cors());
 app.use(express.json());
 const pool = require('./db');
+const jwt = require('jsonwebtoken');
 
 
 
+
+
+// sign in api
 app.post("/api/signin", async (req, res) => {
   const { email, password } = req.body;
   try {
-    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [
-      email,
-    ]);
-    if (rows.length === 0) {
-      return res.status(401).json({ error: "Invalid email or password" });
+    const [user] = await pool.query(
+      "SELECT * FROM Users WHERE email = ?",
+      [email]
+    );
+    if (!user.length) {
+      return res.status(401).json({ error: "⚠ Invalid email or password" });
     }
-    const user = rows[0];
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (isMatch) {
-      res.status(200).json({ message: "Sign-in successful" });
-    } else {
-      res.status(401).json({ error: "Invalid email or password" });
+    const isValidPassword = await bcrypt.compare(password, user[0].password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: "⚠ Invalid email or password" });
     }
+    const token = jwt.sign({ userId: user[0].id }, process.env.SECRET_KEY, {
+      expiresIn: "2h",
+    });
+    res.json({ token });
   } catch (error) {
-    console.error("Error during sign-in:", error);
-    res.status(500).json({ error: "Server error" });
+    console.error(error);
+    res.status(500).json({ error: "Sign-in failed" });
   }
 });
+app.post("/api/verify-token", async (req, res) => {
+  const { token } = req.body;
+  try {
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    res.json({ valid: true });
+  } catch (error) {
+    res.json({ valid: false });
+  }
+});
+
 
 app.post("/api/signup", async (req, res) => {
   console.log('Received request:', req.body);
