@@ -12,6 +12,7 @@ const jwt = require('jsonwebtoken');
 
 
 
+
 // sign in api
 app.post("/api/signin", async (req, res) => {
   const { email, password } = req.body;
@@ -46,7 +47,34 @@ app.post("/api/verify-token", async (req, res) => {
   }
 });
 
+//get username from db
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (token == null) return res.status(401).json({ error: 'Unauthorized' });
 
+  jwt.verify(token, process.env.SECRET_KEY, (err,decoded) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    console.log('Decoded:', decoded);
+    req.user = decoded
+    next();
+  });
+}
+app.get('/api/user', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const [user] = await pool.query('SELECT username FROM Users WHERE id = ?', [userId]);
+    res.json({ username: user[0].username });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error fetching user data' });
+  }
+});
+
+
+
+
+//signup to db
 app.post("/api/signup", async (req, res) => {
   console.log('Received request:', req.body);
   const { username, firstname, lastname, email, password } = req.body;

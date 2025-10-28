@@ -1,6 +1,5 @@
 import "./App.css";
 import { Route, Routes } from "react-router-dom";
-import Home from "./pages/Home/Home";
 import Inventory from "./pages/Inventory/Inventory";
 import Transactions from "./pages/Transactions/Transactions";
 import Sale from "./pages/Sale/Sale";
@@ -9,6 +8,7 @@ import SignUp from "./pages/SignUp/SignUp";
 import Navbar from "./components/Navbar";
 import SignIn from "./pages/SignIn/SignIn";
 import ProtectedRoute from "./pages/ProtectedRoute";
+import Dashboard from "./pages/Dashboard/Dashboard"
 
 function App() {
   return (
@@ -16,7 +16,8 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/home" element={<Home />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route
