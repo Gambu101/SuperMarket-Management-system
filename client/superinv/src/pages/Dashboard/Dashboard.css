@@ -1,4 +1,14 @@
 .dashboard_tabs{
     display: flex;
-    flex-direction: row;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.transaction_history_tab, .sale_tab {
+  padding: 10px 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  cursor: pointer;
+  color: blueviolet;
+  height: 5rem;
+  width: 20rem;
 }

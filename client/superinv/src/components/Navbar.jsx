@@ -9,9 +9,6 @@ export default function Navbar() {
       <Link to="/" className="site-title">SuperInv</Link>
       <ul>
         <li>
-            <Link to="/home">Home</Link>
-        </li>
-        <li>
             <Link to="/inventory">Inventory</Link>
         </li>
         <li>
