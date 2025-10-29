@@ -96,6 +96,37 @@ app.post("/api/signup", async (req, res) => {
     }
   }
 });
+
+
+//inventory
+app.get('/api/inventory', authenticateToken, async (req, res) => {
+  try {
+    const [inventory] = await pool.query('SELECT * FROM Inventory');
+    res.json(inventory);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error fetching inventory' });
+  }
+});
+
+app.post('/api/inventory', authenticateToken, async (req, res) => {
+  try {
+    const { product_name, product_description, quantity, price, category } = req.body;
+    const [result] = await pool.query('INSERT INTO Inventory (product_name, product_description, quantity, price, category) VALUES (?, ?, ?, ?, ?)', [product_name, product_description, quantity, price, category]);
+    const [inventory] = await pool.query('SELECT * FROM Inventory WHERE id = ?', [result.insertId]);
+    res.json(inventory[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error adding to inventory' });
+  }
+});
+
+
+
+
+
+
+
 app.listen(5000,()=>{
     console.log('Listening on port 5000...')
 })
