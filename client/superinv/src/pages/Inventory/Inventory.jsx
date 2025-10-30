@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import "./Inventory.css"
 
 const Inventory = () => {
   const [inventory, setInventory] = useState([]);
@@ -112,29 +113,31 @@ const Inventory = () => {
           />
         </label>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>Product Name</th>
-            <th>Description</th>
-            <th>Quantity</th>
-            <th>Price</th>
-            <th>Category</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredInventory.map((item) => (
-            <tr key={item.id}>
-              <td>{item.product_name}</td>
-              <td>{item.product_description}</td>
-              <td>{item.quantity}</td>
-              <td>{item.price}</td>
-              <td>{item.category}</td>
+      <div className="inventory_page">
+        <table>
+          <thead>
+            <tr>
+              <th>Product Name</th>
+              <th>Description</th>
+              <th>Quantity</th>
+              <th>Price</th>
+              <th>Category</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <form onSubmit={handleSubmit}>
+          </thead>
+          <tbody>
+            {filteredInventory.map((item) => (
+              <tr key={item.id}>
+                <td>{item.product_name}</td>
+                <td>{item.product_description}</td>
+                <td>{item.quantity}</td>
+                <td>{item.price}</td>
+                <td>{item.category}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <form onSubmit={handleSubmit}>
         <label>
           Product Name:
           <input
@@ -177,6 +180,9 @@ const Inventory = () => {
         </label>
         <button type="submit">Add to Inventory</button>
       </form>
+      </div>
+
+      
     </div>
   );
 };

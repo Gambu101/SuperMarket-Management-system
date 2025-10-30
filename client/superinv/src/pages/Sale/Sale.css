@@ -1,0 +1,40 @@
+.sale-container {
+  display: flex;
+}
+
+.product-list {
+  flex: 1;
+  padding: 20px;
+}
+
+.cart {
+  flex: 1;
+  padding: 20px;
+  border: 1px solid #ccc;
+}
+
+.product-item {
+  margin-bottom: 10px;
+}
+
+.product-item span {
+  margin-right: 10px;
+}
+
+.confirm-purchase-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.confirm-purchase-modal-content {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+}
