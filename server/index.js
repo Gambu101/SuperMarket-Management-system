@@ -8,7 +8,22 @@ app.use(express.json());
 const pool = require("./db");
 const jwt = require("jsonwebtoken");
 
-// sign in api
+// Middleware to authenticate token
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (token == null) return res.status(401).json({ error: "Unauthorized" });
+  jwt.verify(token, process.env.SECRET_KEY, async (err, decoded) => {
+    if (err) return res.status(403).json({ error: "Invalid token" });
+    const [user] = await pool.query("SELECT username FROM Users WHERE id = ?", [
+      decoded.userId,
+    ]);
+    req.user = { id: decoded.userId, username: user[0].username };
+    next();
+  });
+}
+
+// API endpoint to sign in
 app.post("/api/signin", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -31,6 +46,8 @@ app.post("/api/signin", async (req, res) => {
     res.status(500).json({ error: "Sign-in failed" });
   }
 });
+
+// API endpoint to verify token
 app.post("/api/verify-token", async (req, res) => {
   const { token } = req.body;
   try {
@@ -41,19 +58,7 @@ app.post("/api/verify-token", async (req, res) => {
   }
 });
 
-//get username from db
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-  if (token == null) return res.status(401).json({ error: "Unauthorized" });
-
-  jwt.verify(token, process.env.SECRET_KEY, (err, user) => {
-    if (err) return res.status(403).json({ error: "Invalid token" });
-    console.log("Decoded:", user);
-    req.user = user;
-    next();
-  });
-}
+// API endpoint to get user data
 app.get("/api/user", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -67,7 +72,7 @@ app.get("/api/user", authenticateToken, async (req, res) => {
   }
 });
 
-//signup to db
+// API endpoint to sign up
 app.post("/api/signup", async (req, res) => {
   console.log("Received request:", req.body);
   const { username, firstname, lastname, email, password } = req.body;
@@ -90,7 +95,7 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
-//inventory
+// API endpoint to get inventory
 app.get("/api/inventory", authenticateToken, async (req, res) => {
   try {
     const [inventory] = await pool.query("SELECT * FROM Inventory");
@@ -103,6 +108,7 @@ app.get("/api/inventory", authenticateToken, async (req, res) => {
   }
 });
 
+// API endpoint to add to inventory
 app.post("/api/inventory", authenticateToken, async (req, res) => {
   try {
     const { product_name, product_description, quantity, price, category } =
@@ -122,54 +128,42 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
   }
 });
 
-//sale
-// API endpoint to get all products
-app.get("/api/inventory", authenticateToken, (req, res) => {
-  const query = "SELECT * FROM Inventory";
-  db.query(query, (err, results) => {
-    if (err) {
-      res.status(500).json({ error: "Error fetching products" });
-    } else {
-      res.json(results);
-    }
-  });
-});
-
 // API endpoint to make a sale
-app.post("/api/sale", authenticateToken, (req, res) => {
+app.post("/api/sale", authenticateToken, async (req, res) => {
   const { cart } = req.body;
-  const query =
-    "INSERT INTO Sales (product_id, quantity, total_price) VALUES ?";
-  const values = Object.values(cart).map((item) => [
-    item.product.id,
-    item.quantity,
-    item.product.price * item.quantity,
-  ]);
+  const userId = req.user.id; // assuming req.user is set by the authenticateToken middleware
 
-  db.query(query, [values], (err, results) => {
-    if (err) {
-      res.status(500).json({ error: "Error making sale" });
-    } else {
-      res.json({ message: "Sale made successfully" });
+  try {
+    await pool.query("START TRANSACTION");
+
+    // Insert transaction records
+    const transactionQuery =
+      "INSERT INTO Transactions (user_id, product_id, product_name, transaction_date, quantity, total_price) VALUES ?";
+    const transactionValues = Object.values(cart).map((item) => [
+      userId,
+      item.product.id,
+      item.product.product_name,
+      new Date(),
+      item.quantity,
+      item.product.price * item.quantity,
+    ]);
+    await pool.query(transactionQuery, [transactionValues]);
+
+    // Update inventory quantity for each product in the cart
+    for (const item of Object.values(cart)) {
+      const updateQuery =
+        "UPDATE Inventory SET quantity = quantity - ? WHERE id = ?";
+      await pool.query(updateQuery, [item.quantity, item.product.id]);
     }
-  });
+
+    await pool.query("COMMIT");
+    res.json({ message: "Sale made successfully" });
+  } catch (error) {
+    await pool.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Error making sale" });
+  }
 });
-
-// API endpoint to update product quantity
-app.put("/api/inventory/:id", authenticateToken, (req, res) => {
-  const { id } = req.params;
-  const { quantity } = req.body;
-  const query = "UPDATE Inventory SET quantity = quantity - ? WHERE id = ?";
-
-  pool.query(query, [quantity, id], (err, results) => {
-    if (err) {
-      res.status(500).json({ error: "Error updating product quantity" });
-    } else {
-      res.json({ message: "Product quantity updated successfully" });
-    }
-  });
-});
-
 
 app.listen(5000, () => {
   console.log("Listening on port 5000...");

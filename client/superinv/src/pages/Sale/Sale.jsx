@@ -51,12 +51,37 @@ const Sale = () => {
     setConfirmPurchase(true);
   };
 
-  const handleConfirmPurchase = () => {
-    // Implement purchase logic here
-    console.log('Purchase confirmed:', cart);
+const handleConfirmPurchase = async () => {
+  try {
+    const response = await axios.post('/api/sale', { cart }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    console.log(response.data.message);
+    
+
+    // Wait for the sale to be confirmed before updating the inventory quantity
+    await Promise.all(Object.values(cart).map(async (item) => {
+      try {
+        const response = await axios.put(`/api/inventory/${item.product.id}`, { quantity: item.quantity }, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        console.log(response.data.message);
+      } catch (error) {
+        console.error('Error updating inventory quantity:', error);
+      }
+    }));
+
     setConfirmPurchase(false);
     setCart({});
-  };
+  } catch (error) {
+    console.error('Error confirming purchase:', error);
+    // Handle error (e.g., display error message to user)
+  }
+};
 
   return (
     <div className="sale-container">
