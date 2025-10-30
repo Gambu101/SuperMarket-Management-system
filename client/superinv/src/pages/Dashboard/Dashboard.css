@@ -1,14 +1,32 @@
-.dashboard_tabs{
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
+/* Dashboard.css */
+.dashboard {
+  padding: 2rem;
+  text-align: center;
 }
-.transaction_history_tab, .sale_tab {
-  padding: 10px 20px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+.error-msg {
+  color: #d32f2f;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+.dashboard_tabs {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.transaction_history_tab,
+.sale_tab {
+  padding: 1rem 2rem;
+  border: 2px solid #4a6cf7;
+  border-radius: 8px;
+  background: #fff;
+  color: #4a6cf7;
+  font-weight: 600;
   cursor: pointer;
-  color: blueviolet;
-  height: 5rem;
-  width: 20rem;
+  transition: 0.2s;
+}
+.transaction_history_tab:hover,
+.sale_tab:hover {
+  background: #4a6cf7;
+  color: white;
 }

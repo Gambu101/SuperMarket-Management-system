@@ -61,14 +61,16 @@ app.post("/api/verify-token", async (req, res) => {
 // API endpoint to get user data
 app.get("/api/user", authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const [user] = await pool.query("SELECT username FROM Users WHERE id = ?", [
-      userId,
-    ]);
-    res.json({ username: user[0].username });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error fetching user data" });
+    const [rows] = await pool.query(
+      "SELECT username FROM Users WHERE id = ?",
+      [req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: "User not found" });
+
+    res.json({ username: rows[0].username });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -95,36 +97,83 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
-// API endpoint to get inventory
+//GET for /api/inventory
 app.get("/api/inventory", authenticateToken, async (req, res) => {
   try {
-    const [inventory] = await pool.query("SELECT * FROM Inventory");
-    res.json(inventory);
-  } catch (error) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ error: "Error fetching inventory", details: error.message });
+    const [rows] = await pool.query("SELECT * FROM Inventory ORDER BY product_name");
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Fetch failed" });
   }
 });
 
-// API endpoint to add to inventory
+// POST for /api/inventory → UPSERT (add or restock)
 app.post("/api/inventory", authenticateToken, async (req, res) => {
+  const { product_name, product_description, quantity, price, category } = req.body;
+
   try {
-    const { product_name, product_description, quantity, price, category } =
-      req.body;
+    // Check if product exists
+    const [existing] = await pool.query(
+      "SELECT id, quantity FROM Inventory WHERE product_name = ?",
+      [product_name]
+    );
+
+    let result;
+    if (existing.length > 0) {
+      // Restock: increase quantity
+      const newQty = existing[0].quantity + Number(quantity);
+      await pool.query(
+        "UPDATE Inventory SET quantity = ?, price = ?, category = ?, product_description = ? WHERE id = ?",
+        [newQty, price, category, product_description || null, existing[0].id]
+      );
+      result = { id: existing[0].id, product_name, product_description, quantity: newQty, price, category };
+    } else {
+      // Insert new
+      const [insert] = await pool.query(
+        "INSERT INTO Inventory (product_name, product_description, quantity, price, category) VALUES (?, ?, ?, ?, ?)",
+        [product_name, product_description || null, quantity, price, category]
+      );
+      result = { id: insert.insertId, product_name, product_description, quantity, price, category };
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Upsert failed" });
+  }
+});
+
+//PUT for /api/inventory/:id 
+app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
+  const { product_name, product_description, quantity, price, category } = req.body;
+  const id = req.params.id;
+
+  try {
     const [result] = await pool.query(
-      "INSERT INTO Inventory (product_name, product_description, quantity, price, category) VALUES (?, ?, ?, ?, ?)",
-      [product_name, product_description, quantity, price, category],
+      "UPDATE Inventory SET product_name = ?, product_description = ?, quantity = ?, price = ?, category = ? WHERE id = ?",
+      [product_name, product_description || null, quantity, price, category, id]
     );
-    const [inventory] = await pool.query(
-      "SELECT * FROM Inventory WHERE id = ?",
-      [result.insertId],
-    );
-    res.json(inventory[0]);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error adding to inventory" });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+    res.json({ id, product_name, product_description, quantity, price, category });
+  } catch (err) {
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
+//DELETE for /api/inventory/:id
+app.delete("/api/inventory/:id", authenticateToken, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const [result] = await pool.query("DELETE FROM Inventory WHERE id = ?", [id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ error: "Delete failed" });
   }
 });
 

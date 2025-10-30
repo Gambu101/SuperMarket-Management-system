@@ -1,142 +1,197 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import './Sale.css';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import axios from "axios";
+import "./Sale.css";
 
 const Sale = () => {
   const [inventory, setInventory] = useState([]);
   const [cart, setCart] = useState({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredInventory, setFilteredInventory] = useState([]);
-  const [confirmPurchase, setConfirmPurchase] = useState(false);
-  const token = localStorage.getItem('token');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState({ msg: "", type: "" });
+  const token = localStorage.getItem("token");
 
+  // === Toast Helper ===
+  const showToast = (msg, type = "error") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast({ msg: "", type: "" }), 3000);
+  };
+
+  // === Fetch Inventory ===
   useEffect(() => {
     const fetchInventory = async () => {
       try {
-        const response = await axios.get('/api/inventory', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const { data } = await axios.get("/api/inventory", {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        setInventory(response.data.sort((a, b) => a.product_name.localeCompare(b.product_name)));
-        setFilteredInventory(response.data.sort((a, b) => a.product_name.localeCompare(b.product_name)));
-      } catch (error) {
-        console.error(error);
+        setInventory(data.sort((a, b) => a.product_name.localeCompare(b.product_name)));
+      } catch (err) {
+        showToast("Failed to load products");
+      } finally {
+        setLoading(false);
       }
     };
     fetchInventory();
   }, [token]);
 
-  useEffect(() => {
-    const filtered = inventory.filter((item) => {
-      return item.product_name.toLowerCase().includes(searchTerm.toLowerCase());
-    });
-    setFilteredInventory(filtered);
-  }, [searchTerm, inventory]);
+  // === Search Filter ===
+  const filteredInventory = useMemo(() => {
+    return inventory.filter((item) =>
+      item.product_name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [inventory, searchTerm]);
 
-  const handleAddToCart = (product, quantity) => {
-    if (cart[product.id]) {
-      setCart({ ...cart, [product.id]: { ...cart[product.id], quantity: cart[product.id].quantity + quantity } });
+  // === Cart Logic ===
+  const updateCart = useCallback((product, delta) => {
+    const current = cart[product.id]?.quantity ?? 0;
+    const newQty = current + delta;
+
+    if (newQty < 0) return;
+    if (newQty > product.quantity) {
+      showToast(`Only ${product.quantity} left!`);
+      return;
+    }
+
+    if (newQty === 0) {
+      const { [product.id]: _, ...rest } = cart;
+      setCart(rest);
     } else {
-      setCart({ ...cart, [product.id]: { product, quantity } });
+      setCart({ ...cart, [product.id]: { product, quantity: newQty } });
+    }
+  }, [cart]);
+
+  const removeFromCart = (id) => {
+    const { [id]: _, ...rest } = cart;
+    setCart(rest);
+  };
+
+  // === Totals ===
+  const cartTotal = useMemo(() => {
+    return Object.values(cart).reduce(
+      (sum, { product, quantity }) => sum + product.price * quantity,
+      0
+    );
+  }, [cart]);
+
+  // === Confirm Purchase ===
+  const handlePurchase = () => {
+    if (Object.keys(cart).length === 0) {
+      showToast("Cart is empty!");
+      return;
+    }
+    setShowConfirm(true);
+  };
+
+  const confirmPurchase = async () => {
+    try {
+      // 1. Record sale
+      await axios.post("/api/sale", { cart }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // 2. Refresh inventory
+      const { data } = await axios.get("/api/inventory", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setInventory(data.sort((a, b) => a.product_name.localeCompare(b.product_name)));
+
+      // 3. Reset
+      setCart({});
+      setShowConfirm(false);
+      showToast("Sale completed!", "success");
+    } catch (err) {
+      showToast("Sale failed. Try again.");
+      console.error(err);
     }
   };
 
-  const handleRemoveFromCart = (productId) => {
-    delete cart[productId];
-    setCart({ ...cart });
-  };
-
-  const handlePurchase = () => {
-    setConfirmPurchase(true);
-  };
-
-const handleConfirmPurchase = async () => {
-  try {
-    const response = await axios.post('/api/sale', { cart }, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    console.log(response.data.message);
-    
-
-    // Wait for the sale to be confirmed before updating the inventory quantity
-    await Promise.all(Object.values(cart).map(async (item) => {
-      try {
-        const response = await axios.put(`/api/inventory/${item.product.id}`, { quantity: item.quantity }, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        console.log(response.data.message);
-      } catch (error) {
-        console.error('Error updating inventory quantity:', error);
-      }
-    }));
-
-    setConfirmPurchase(false);
-    setCart({});
-  } catch (error) {
-    console.error('Error confirming purchase:', error);
-    // Handle error (e.g., display error message to user)
-  }
-};
+  if (loading) return <div className="spinner">Loading...</div>;
 
   return (
-    <div className="sale-container">
-      <div className="product-list">
-        <h1>Sale</h1>
-        <input
-          type="text"
-          placeholder="Search for products..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <ul>
-          {filteredInventory.map((item) => (
-            <li key={item.id} className="product-item">
-              <span>{item.product_name} - ₦{item.price}</span>
-              <input
-                type="number"
-                value={cart[item.id] ? cart[item.id].quantity : 0}
-                onChange={(e) => handleAddToCart(item, parseInt(e.target.value))}
-              />
-              <button onClick={() => handleAddToCart(item, 1)}>+</button>
-              <button onClick={() => handleAddToCart(item, -1)}>-</button>
-            </li>
-          ))}
-        </ul>
+    <>
+      {/* Toast */}
+      {toast.msg && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+
+      <div className="sale-container">
+        {/* Product List */}
+        <section className="product-list">
+          <h1>Sale</h1>
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <div className="product-grid">
+            {filteredInventory.map((item) => (
+              <div key={item.id} className="product-card">
+                <h3>{item.product_name}</h3>
+                <p>₦{Number(item.price).toFixed(2)}</p>
+                <p className="stock">Stock: {item.quantity}</p>
+
+                <div className="quantity-controls">
+                  <button onClick={() => updateCart(item, -1)}>-</button>
+                  <span className="qty">
+                    {cart[item.id]?.quantity ?? 0}
+                  </span>
+                  <button onClick={() => updateCart(item, 1)}>+</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Cart */}
+        <section className="cart">
+          <h2>Cart ({Object.keys(cart).length})</h2>
+          {Object.values(cart).length === 0 ? (
+            <p className="empty">No items</p>
+          ) : (
+            <>
+              <ul>
+                {Object.values(cart).map(({ product, quantity }) => (
+                  <li key={product.id}>
+                    <span>
+                      {product.product_name} × {quantity} = ₦
+                      {(product.price * quantity).toFixed(2)}
+                    </span>
+                    <button onClick={() => removeFromCart(product.id)}>×</button>
+                  </li>
+                ))}
+              </ul>
+              <div className="total">
+                <strong>Total: ₦{cartTotal.toFixed(2)}</strong>
+              </div>
+              <button className="purchase-btn" onClick={handlePurchase}>
+                Checkout
+              </button>
+            </>
+          )}
+        </section>
       </div>
-      <div className="cart">
-        <h2>Cart</h2>
-        <ul>
-          {Object.values(cart).map((item) => (
-            <li key={item.product.id}>
-              <span>{item.product.product_name} x {item.quantity} - ₦{item.product.price * item.quantity}</span>
-              <button onClick={() => handleRemoveFromCart(item.product.id)}>x</button>
-            </li>
-          ))}
-        </ul>
-        <button onClick={handlePurchase}>Purchase</button>
-      </div>
-      {confirmPurchase && (
-        <div className="confirm-purchase-modal">
-          <div className="confirm-purchase-modal-content">
-            <h2>Confirm Purchase</h2>
+
+      {/* Confirm Modal */}
+      {showConfirm && (
+        <div className="modal-backdrop" onClick={() => setShowConfirm(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Confirm Sale</h2>
             <ul>
-              {Object.values(cart).map((item) => (
-                <li key={item.product.id}>
-                  <span>{item.product.product_name} x {item.quantity} - ₦{item.product.price * item.quantity}</span>
+              {Object.values(cart).map(({ product, quantity }) => (
+                <li key={product.id}>
+                  {product.product_name} × {quantity} = ₦
+                  {(product.price * quantity).toFixed(2)}
                 </li>
               ))}
             </ul>
-            <button onClick={handleConfirmPurchase}>Confirm</button>
-            <button onClick={() => setConfirmPurchase(false)}>Cancel</button>
+            <p className="total"><strong>₦{cartTotal.toFixed(2)}</strong></p>
+            <div className="modal-actions">
+              <button onClick={confirmPurchase}>Confirm</button>
+              <button onClick={() => setShowConfirm(false)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
