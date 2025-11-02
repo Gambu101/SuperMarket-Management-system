@@ -177,6 +177,32 @@ app.delete("/api/inventory/:id", authenticateToken, async (req, res) => {
   }
 });
 
+
+
+// GET /api/transactions – all sales by current user
+app.get("/api/transactions", authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT 
+         t.id,
+         t.product_name,
+         t.quantity,
+         t.unit_price,
+         t.total_price,
+         t.transaction_date
+       FROM Transactions t
+       WHERE t.user_id = ?
+       ORDER BY t.transaction_date DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+
 // API endpoint to make a sale
 app.post("/api/sale", authenticateToken, async (req, res) => {
   const { cart } = req.body;
@@ -211,6 +237,7 @@ app.post("/api/sale", authenticateToken, async (req, res) => {
     await pool.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ error: "Error making sale" });
+    
   }
 });
 
