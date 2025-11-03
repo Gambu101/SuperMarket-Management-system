@@ -57,7 +57,6 @@ const Transactions = () => {
 
   return (
     <div className="transactions-page">
-        <BackButton></BackButton>
       {/* Back Button */}
       <Link to="/dashboard" className="back-btn">
         ← Back to Dashboard

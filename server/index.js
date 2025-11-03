@@ -110,10 +110,16 @@ app.get("/api/inventory", authenticateToken, async (req, res) => {
 
 // POST for /api/inventory → UPSERT (add or restock)
 app.post("/api/inventory", authenticateToken, async (req, res) => {
-  const { product_name, product_description, quantity, price, category } = req.body;
+  const {
+    product_name,
+    product_description,
+    quantity,
+    price,
+    category,
+    low_stock_threshold = 5,
+  } = req.body;
 
   try {
-    // Check if product exists
     const [existing] = await pool.query(
       "SELECT id, quantity FROM Inventory WHERE product_name = ?",
       [product_name]
@@ -121,20 +127,22 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
 
     let result;
     if (existing.length > 0) {
-      // Restock: increase quantity
       const newQty = existing[0].quantity + Number(quantity);
       await pool.query(
-        "UPDATE Inventory SET quantity = ?, price = ?, category = ?, product_description = ? WHERE id = ?",
-        [newQty, price, category, product_description || null, existing[0].id]
+        `UPDATE Inventory 
+         SET quantity = ?, price = ?, category = ?, product_description = ?, low_stock_threshold = ?
+         WHERE id = ?`,
+        [newQty, price, category, product_description || null, low_stock_threshold, existing[0].id]
       );
-      result = { id: existing[0].id, product_name, product_description, quantity: newQty, price, category };
+      result = { id: existing[0].id, product_name, product_description, quantity: newQty, price, category, low_stock_threshold };
     } else {
-      // Insert new
       const [insert] = await pool.query(
-        "INSERT INTO Inventory (product_name, product_description, quantity, price, category) VALUES (?, ?, ?, ?, ?)",
-        [product_name, product_description || null, quantity, price, category]
+        `INSERT INTO Inventory 
+         (product_name, product_description, quantity, price, category, low_stock_threshold) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [product_name, product_description || null, quantity, price, category, low_stock_threshold]
       );
-      result = { id: insert.insertId, product_name, product_description, quantity, price, category };
+      result = { id: insert.insertId, product_name, product_description, quantity, price, category, low_stock_threshold };
     }
 
     res.json(result);
@@ -146,18 +154,27 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
 
 //PUT for /api/inventory/:id 
 app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
-  const { product_name, product_description, quantity, price, category } = req.body;
+  const {
+    product_name,
+    product_description,
+    quantity,
+    price,
+    category,
+    low_stock_threshold,
+  } = req.body;
   const id = req.params.id;
 
   try {
     const [result] = await pool.query(
-      "UPDATE Inventory SET product_name = ?, product_description = ?, quantity = ?, price = ?, category = ? WHERE id = ?",
-      [product_name, product_description || null, quantity, price, category, id]
+      `UPDATE Inventory 
+       SET product_name = ?, product_description = ?, quantity = ?, price = ?, category = ?, low_stock_threshold = ?
+       WHERE id = ?`,
+      [product_name, product_description || null, quantity, price, category, low_stock_threshold, id]
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Item not found" });
     }
-    res.json({ id, product_name, product_description, quantity, price, category });
+    res.json({ id, product_name, product_description, quantity, price, category, low_stock_threshold });
   } catch (err) {
     res.status(500).json({ error: "Update failed" });
   }
@@ -179,7 +196,7 @@ app.delete("/api/inventory/:id", authenticateToken, async (req, res) => {
 
 
 
-// GET /api/transactions – all sales by current user
+// GET /api/transactions – all sales to be viewed by current user
 app.get("/api/transactions", authenticateToken, async (req, res) => {
   try {
     const [rows] = await pool.query(

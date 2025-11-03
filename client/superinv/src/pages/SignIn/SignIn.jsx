@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "./SignIn.css";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function SignIn() {
   const [formData, setFormData] = useState({
@@ -78,6 +78,7 @@ export default function SignIn() {
         <button type="submit" disabled={loading}>
           {loading ? "Signing in..." : "Sign In"}
         </button>
+        <p><Link to="/signup">Not a registered user? Sign up <span className="arrow">&rarr;</span></Link></p>
       </form>
     </div>
   );

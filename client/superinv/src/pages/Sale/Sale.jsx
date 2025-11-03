@@ -26,7 +26,7 @@ const Sale = () => {
         });
         setInventory(data.sort((a, b) => a.product_name.localeCompare(b.product_name)));
       } catch (err) {
-        showToast("Failed to load products");
+        showToast(err, "Failed to load products");
       } finally {
         setLoading(false);
       }
@@ -109,10 +109,12 @@ const Sale = () => {
 
   return (
     <>
+    
       {/* Toast */}
       {toast.msg && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
 
       <div className="sale-container">
+        
         {/* Product List */}
         <section className="product-list">
           <h1>Sale</h1>
