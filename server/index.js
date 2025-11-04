@@ -8,6 +8,49 @@ app.use(express.json());
 const pool = require("./db");
 const jwt = require("jsonwebtoken");
 
+const nodemailer = require("nodemailer");
+
+// Email transporter (Gmail example)
+const transporter = nodemailer.createTransport({
+  host: "smtp.example.com",
+  port: 587,
+  secure: false, // or 'STARTTLS'
+  auth: {
+    user: "username",
+    pass: "password",
+  },
+});
+
+// Function to send low-stock email
+const sendLowStockEmail = async (userEmail, lowItems) => {
+  const itemsList = lowItems
+    .map(
+      (item) =>
+        `<li><strong>${item.product_name}</strong>: ${item.quantity} left (threshold: ${item.low_stock_threshold})</li>`,
+    )
+    .join("");
+
+  const mailOptions = {
+    from: `"SuperInv Alerts" <${process.env.EMAIL_USER}>`,
+    to: userEmail,
+    subject: `🚨 Low Stock Alert - SuperInv`,
+    html: `
+      <h2>Low Stock Alert</h2>
+      <p>Hello! The following items need restocking:</p>
+      <ul>${itemsList}</ul>
+      <p>Login to <a href="http://localhost:3000">SuperInv</a> to update.</p>
+      <p>Best,<br>SuperInv Team</p>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Low-stock email sent to ${userEmail}`);
+  } catch (err) {
+    console.error("Email failed:", err);
+  }
+};
+
 // Middleware to authenticate token
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
@@ -61,10 +104,9 @@ app.post("/api/verify-token", async (req, res) => {
 // API endpoint to get user data
 app.get("/api/user", authenticateToken, async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      "SELECT username FROM Users WHERE id = ?",
-      [req.user.id]
-    );
+    const [rows] = await pool.query("SELECT username FROM Users WHERE id = ?", [
+      req.user.id,
+    ]);
     if (!rows.length) return res.status(404).json({ error: "User not found" });
 
     res.json({ username: rows[0].username });
@@ -100,7 +142,27 @@ app.post("/api/signup", async (req, res) => {
 //GET for /api/inventory
 app.get("/api/inventory", authenticateToken, async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM Inventory ORDER BY product_name");
+    const [rows] = await pool.query(
+      "SELECT * FROM Inventory ORDER BY product_name",
+    );
+
+    // Get user email
+    const [userRows] = await pool.query(
+      "SELECT email FROM Users WHERE id = ?",
+      [req.user.id],
+    );
+    const userEmail = userRows[0]?.email;
+
+    if (userEmail) {
+      const lowItems = rows.filter(
+        (item) => item.quantity <= item.low_stock_threshold,
+      );
+      if (lowItems.length > 0) {
+        // Optional: Check last sent time to avoid spam (add `last_email_sent` column to Users if needed)
+        await sendLowStockEmail(userEmail, lowItems);
+      }
+    }
+
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -118,31 +180,68 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
     category,
     low_stock_threshold = 5,
   } = req.body;
+  const userId = req.user.id;
 
   try {
     const [existing] = await pool.query(
       "SELECT id, quantity FROM Inventory WHERE product_name = ?",
-      [product_name]
+      [product_name],
     );
 
     let result;
     if (existing.length > 0) {
       const newQty = existing[0].quantity + Number(quantity);
       await pool.query(
-        `UPDATE Inventory 
-         SET quantity = ?, price = ?, category = ?, product_description = ?, low_stock_threshold = ?
-         WHERE id = ?`,
-        [newQty, price, category, product_description || null, low_stock_threshold, existing[0].id]
+        "UPDATE Inventory SET quantity = ?, price = ?, category = ?, product_description = ?, low_stock_threshold = ? WHERE id = ?",
+        [
+          newQty,
+          price,
+          category,
+          product_description || null,
+          low_stock_threshold,
+          existing[0].id,
+        ],
       );
-      result = { id: existing[0].id, product_name, product_description, quantity: newQty, price, category, low_stock_threshold };
+      result = {
+        id: existing[0].id,
+        product_name,
+        product_description,
+        quantity: newQty,
+        price,
+        category,
+        low_stock_threshold,
+      };
     } else {
       const [insert] = await pool.query(
-        `INSERT INTO Inventory 
-         (product_name, product_description, quantity, price, category, low_stock_threshold) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [product_name, product_description || null, quantity, price, category, low_stock_threshold]
+        "INSERT INTO Inventory (product_name, product_description, quantity, price, category, low_stock_threshold) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          product_name,
+          product_description || null,
+          quantity,
+          price,
+          category,
+          low_stock_threshold,
+        ],
       );
-      result = { id: insert.insertId, product_name, product_description, quantity, price, category, low_stock_threshold };
+      result = {
+        id: insert.insertId,
+        product_name,
+        product_description,
+        quantity,
+        price,
+        category,
+        low_stock_threshold,
+      };
+    }
+
+    // Send email if low
+    const [userRows] = await pool.query(
+      "SELECT email FROM Users WHERE id = ?",
+      [userId],
+    );
+    const userEmail = userRows[0]?.email;
+    if (userEmail && result.quantity <= low_stock_threshold) {
+      await sendLowStockEmail(userEmail, [result]);
     }
 
     res.json(result);
@@ -152,7 +251,7 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
   }
 });
 
-//PUT for /api/inventory/:id 
+//PUT for /api/inventory/:id
 app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
   const {
     product_name,
@@ -163,18 +262,46 @@ app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
     low_stock_threshold,
   } = req.body;
   const id = req.params.id;
+  const userId = req.user.id;
 
   try {
     const [result] = await pool.query(
-      `UPDATE Inventory 
-       SET product_name = ?, product_description = ?, quantity = ?, price = ?, category = ?, low_stock_threshold = ?
-       WHERE id = ?`,
-      [product_name, product_description || null, quantity, price, category, low_stock_threshold, id]
+      "UPDATE Inventory SET product_name = ?, product_description = ?, quantity = ?, price = ?, category = ?, low_stock_threshold = ? WHERE id = ?",
+      [
+        product_name,
+        product_description || null,
+        quantity,
+        price,
+        category,
+        low_stock_threshold,
+        id,
+      ],
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Item not found" });
     }
-    res.json({ id, product_name, product_description, quantity, price, category, low_stock_threshold });
+
+    const updatedItem = {
+      id,
+      product_name,
+      product_description,
+      quantity,
+      price,
+      category,
+      low_stock_threshold,
+    };
+
+    // Send email if now low
+    const [userRows] = await pool.query(
+      "SELECT email FROM Users WHERE id = ?",
+      [userId],
+    );
+    const userEmail = userRows[0]?.email;
+    if (userEmail && quantity <= low_stock_threshold) {
+      await sendLowStockEmail(userEmail, [updatedItem]);
+    }
+
+    res.json(updatedItem);
   } catch (err) {
     res.status(500).json({ error: "Update failed" });
   }
@@ -184,7 +311,9 @@ app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
 app.delete("/api/inventory/:id", authenticateToken, async (req, res) => {
   const id = req.params.id;
   try {
-    const [result] = await pool.query("DELETE FROM Inventory WHERE id = ?", [id]);
+    const [result] = await pool.query("DELETE FROM Inventory WHERE id = ?", [
+      id,
+    ]);
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Not found" });
     }
@@ -193,8 +322,6 @@ app.delete("/api/inventory/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Delete failed" });
   }
 });
-
-
 
 // GET /api/transactions – all sales to be viewed by current user
 app.get("/api/transactions", authenticateToken, async (req, res) => {
@@ -210,7 +337,7 @@ app.get("/api/transactions", authenticateToken, async (req, res) => {
        FROM Transactions t
        WHERE t.user_id = ?
        ORDER BY t.transaction_date DESC`,
-      [req.user.id]
+      [req.user.id],
     );
     res.json(rows);
   } catch (err) {
@@ -218,7 +345,6 @@ app.get("/api/transactions", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch transactions" });
   }
 });
-
 
 // API endpoint to make a sale
 app.post("/api/sale", authenticateToken, async (req, res) => {
@@ -254,7 +380,6 @@ app.post("/api/sale", authenticateToken, async (req, res) => {
     await pool.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ error: "Error making sale" });
-    
   }
 });
 
