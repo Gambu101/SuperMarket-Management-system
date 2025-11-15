@@ -11,13 +11,14 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 
 // Email transporter (Gmail example)
-const transporter = nodemailer.createTransport({
-  host: "smtp.example.com",
-  port: 587,
-  secure: false, // or 'STARTTLS'
+let transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
-    user: "username",
-    pass: "password",
+    type: "OAuth2",
+    user: "user@example.com",
+    accessToken: "ya29.Xx_XX0xxxxx-xX0X0XxXXxXxXXXxX0x",
   },
 });
 
@@ -38,7 +39,7 @@ const sendLowStockEmail = async (userEmail, lowItems) => {
       <h2>Low Stock Alert</h2>
       <p>Hello! The following items need restocking:</p>
       <ul>${itemsList}</ul>
-      <p>Login to <a href="http://localhost:3000">SuperInv</a> to update.</p>
+      <p>Kindly update </p>
       <p>Best,<br>SuperInv Team</p>
     `,
   };
