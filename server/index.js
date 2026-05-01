@@ -10,15 +10,14 @@ const jwt = require("jsonwebtoken");
 
 const nodemailer = require("nodemailer");
 
-// Email transporter (Gmail example)
+// Email transporter using environment variables
 let transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  port: parseInt(process.env.EMAIL_PORT) || 587,
+  secure: parseInt(process.env.EMAIL_PORT) === 465,
   auth: {
-    type: "OAuth2",
-    user: "user@example.com",
-    accessToken: "ya29.Xx_XX0xxxxx-xX0X0XxXXxXxXXXxX0x",
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
@@ -52,19 +51,20 @@ const sendLowStockEmail = async (userEmail, lowItems) => {
   }
 };
 
-// Middleware to authenticate token
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-  if (token == null) return res.status(401).json({ error: "Unauthorized" });
-  jwt.verify(token, process.env.SECRET_KEY, async (err, decoded) => {
-    if (err) return res.status(403).json({ error: "Invalid token" });
-    const [user] = await pool.query("SELECT username FROM Users WHERE id = ?", [
-      decoded.userId,
-    ]);
-    req.user = { id: decoded.userId, username: user[0].username };
-    next();
-  });
+// Middleware to check if user is admin
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+}
+
+// Middleware to check if user is manager or admin
+function requireManager(req, res, next) {
+  if (req.user.role !== 'manager' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: "Manager or Admin access required" });
+  }
+  next();
 }
 
 // API endpoint to sign in
@@ -81,9 +81,11 @@ app.post("/api/signin", async (req, res) => {
     if (!isValidPassword) {
       return res.status(401).json({ error: "⚠ Invalid email or password" });
     }
-    const token = jwt.sign({ userId: user[0].id }, process.env.SECRET_KEY, {
-      expiresIn: "2h",
-    });
+    const token = jwt.sign(
+      { userId: user[0].id, role: user[0].role },
+      process.env.SECRET_KEY,
+      { expiresIn: "2h" }
+    );
     res.json({ token });
   } catch (error) {
     console.error(error);
@@ -105,12 +107,12 @@ app.post("/api/verify-token", async (req, res) => {
 // API endpoint to get user data
 app.get("/api/user", authenticateToken, async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT username FROM Users WHERE id = ?", [
+    const [rows] = await pool.query("SELECT username, role FROM Users WHERE id = ?", [
       req.user.id,
     ]);
     if (!rows.length) return res.status(404).json({ error: "User not found" });
 
-    res.json({ username: rows[0].username });
+    res.json({ username: rows[0].username, role: rows[0].role });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -120,13 +122,13 @@ app.get("/api/user", authenticateToken, async (req, res) => {
 // API endpoint to sign up
 app.post("/api/signup", async (req, res) => {
   console.log("Received request:", req.body);
-  const { username, firstname, lastname, email, password } = req.body;
+  const { username, firstname, lastname, email, password, role = 'user' } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log("Hashed password:", hashedPassword);
     await pool.query(
-      "INSERT INTO Users (username, firstname, lastname, email, password) VALUES (?, ?, ?, ?, ?)",
-      [username, firstname, lastname, email, hashedPassword],
+      "INSERT INTO Users (username, firstname, lastname, email, password, role) VALUES (?, ?, ?, ?, ?, ?)",
+      [username, firstname, lastname, email, hashedPassword, role],
     );
     console.log("User inserted successfully");
     res.status(201).json({ message: "User registered" });
@@ -147,23 +149,6 @@ app.get("/api/inventory", authenticateToken, async (req, res) => {
       "SELECT * FROM Inventory ORDER BY product_name",
     );
 
-    // Get user email
-    const [userRows] = await pool.query(
-      "SELECT email FROM Users WHERE id = ?",
-      [req.user.id],
-    );
-    const userEmail = userRows[0]?.email;
-
-    if (userEmail) {
-      const lowItems = rows.filter(
-        (item) => item.quantity <= item.low_stock_threshold,
-      );
-      if (lowItems.length > 0) {
-        // Optional: Check last sent time to avoid spam (add `last_email_sent` column to Users if needed)
-        await sendLowStockEmail(userEmail, lowItems);
-      }
-    }
-
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -171,7 +156,76 @@ app.get("/api/inventory", authenticateToken, async (req, res) => {
   }
 });
 
-// POST for /api/inventory → UPSERT (add or restock)
+// Dedicated endpoint to check low stock and send email alert
+app.post("/api/check-low-stock", authenticateToken, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM Inventory ORDER BY product_name",
+    );
+
+    const lowItems = rows.filter(
+      (item) => item.quantity <= item.low_stock_threshold,
+    );
+
+    // Get user email
+    const [userRows] = await pool.query(
+      "SELECT email FROM Users WHERE id = ?",
+      [req.user.id],
+    );
+    const userEmail = userRows[0]?.email;
+
+    if (!userEmail) {
+      return res.status(400).json({ error: "User email not found" });
+    }
+
+    if (lowItems.length > 0) {
+      await sendLowStockEmail(userEmail, lowItems);
+      return res.json({ 
+        message: `Low stock alert sent for ${lowItems.length} items`,
+        lowItems 
+      });
+    }
+
+    res.json({ message: "No low stock items", lowItems: [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Check failed" });
+  }
+});
+
+// Helper function to log stock activities
+const logStockActivity = async (
+  userId,
+  activityType,
+  productId,
+  productName,
+  quantityChanged,
+  previousQuantity,
+  newQuantity,
+  details = null
+) => {
+  try {
+    await pool.query(
+      `INSERT INTO StockActivityLog 
+       (user_id, activity_type, product_id, product_name, quantity_changed, previous_quantity, new_quantity, details, activity_timestamp) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [
+        userId,
+        activityType,
+        productId,
+        productName,
+        quantityChanged,
+        previousQuantity,
+        newQuantity,
+        details,
+      ]
+    );
+  } catch (err) {
+    console.error("Failed to log stock activity:", err);
+  }
+};
+
+//POST for /api/inventory → UPSERT (add or restock)
 app.post("/api/inventory", authenticateToken, async (req, res) => {
   const {
     product_name,
@@ -191,6 +245,7 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
 
     let result;
     if (existing.length > 0) {
+      const previousQty = existing[0].quantity;
       const newQty = existing[0].quantity + Number(quantity);
       await pool.query(
         "UPDATE Inventory SET quantity = ?, price = ?, category = ?, product_description = ?, low_stock_threshold = ? WHERE id = ?",
@@ -212,6 +267,17 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
         category,
         low_stock_threshold,
       };
+      // Log ADD/RESTOCK activity (adding quantity to existing item)
+      await logStockActivity(
+        userId,
+        "ADD",
+        existing[0].id,
+        product_name,
+        Number(quantity),
+        previousQty,
+        newQty,
+        JSON.stringify({ action: "restock", price, category })
+      );
     } else {
       const [insert] = await pool.query(
         "INSERT INTO Inventory (product_name, product_description, quantity, price, category, low_stock_threshold) VALUES (?, ?, ?, ?, ?, ?)",
@@ -233,6 +299,17 @@ app.post("/api/inventory", authenticateToken, async (req, res) => {
         category,
         low_stock_threshold,
       };
+      // Log ADD activity (new item added)
+      await logStockActivity(
+        userId,
+        "ADD",
+        insert.insertId,
+        product_name,
+        Number(quantity),
+        0,
+        Number(quantity),
+        JSON.stringify({ action: "new_item", price, category })
+      );
     }
 
     // Send email if low
@@ -266,6 +343,17 @@ app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
+    // Get previous quantity before update
+    const [existing] = await pool.query(
+      "SELECT product_name, quantity FROM Inventory WHERE id = ?",
+      [id]
+    );
+    if (existing.length === 0) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+    const previousQty = existing[0].quantity;
+    const previousName = existing[0].product_name;
+
     const [result] = await pool.query(
       "UPDATE Inventory SET product_name = ?, product_description = ?, quantity = ?, price = ?, category = ?, low_stock_threshold = ? WHERE id = ?",
       [
@@ -292,6 +380,18 @@ app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
       low_stock_threshold,
     };
 
+    // Log EDIT activity
+    await logStockActivity(
+      userId,
+      "EDIT",
+      id,
+      product_name,
+      Number(quantity) - previousQty,
+      previousQty,
+      Number(quantity),
+      JSON.stringify({ action: "edit", price, category })
+    );
+
     // Send email if now low
     const [userRows] = await pool.query(
       "SELECT email FROM Users WHERE id = ?",
@@ -311,13 +411,38 @@ app.put("/api/inventory/:id", authenticateToken, async (req, res) => {
 //DELETE for /api/inventory/:id
 app.delete("/api/inventory/:id", authenticateToken, async (req, res) => {
   const id = req.params.id;
+  const userId = req.user.id;
   try {
+    // Get item details before delete for logging
+    const [existing] = await pool.query(
+      "SELECT product_name, quantity FROM Inventory WHERE id = ?",
+      [id]
+    );
+    if (existing.length === 0) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const productName = existing[0].product_name;
+    const previousQty = existing[0].quantity;
+
     const [result] = await pool.query("DELETE FROM Inventory WHERE id = ?", [
       id,
     ]);
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Not found" });
     }
+
+    // Log DELETE activity
+    await logStockActivity(
+      userId,
+      "DELETE",
+      id,
+      productName,
+      -previousQty,
+      previousQty,
+      0,
+      JSON.stringify({ action: "delete" })
+    );
+
     res.json({ message: "Deleted" });
   } catch (err) {
     res.status(500).json({ error: "Delete failed" });
@@ -357,13 +482,14 @@ app.post("/api/sale", authenticateToken, async (req, res) => {
 
     // Insert transaction records
     const transactionQuery =
-      "INSERT INTO Transactions (user_id, product_id, product_name, transaction_date, quantity, total_price) VALUES ?";
+      "INSERT INTO Transactions (user_id, product_id, product_name, transaction_date, quantity, unit_price, total_price) VALUES ?";
     const transactionValues = Object.values(cart).map((item) => [
       userId,
       item.product.id,
       item.product.product_name,
       new Date(),
       item.quantity,
+      item.product.price,
       item.product.price * item.quantity,
     ]);
     await pool.query(transactionQuery, [transactionValues]);
@@ -381,6 +507,200 @@ app.post("/api/sale", authenticateToken, async (req, res) => {
     await pool.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ error: "Error making sale" });
+  }
+});
+
+// Admin APIs
+
+// GET /api/admin/users - List all users (admin only)
+app.get("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, username, firstname, lastname, email, role FROM Users ORDER BY username"
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+
+// POST /api/admin/users - Create user with role (admin only)
+app.post("/api/admin/users", authenticateToken, requireAdmin, async (req, res) => {
+  const { username, firstname, lastname, email, password, role = 'user' } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await pool.query(
+      "INSERT INTO Users (username, firstname, lastname, email, password, role) VALUES (?, ?, ?, ?, ?, ?)",
+      [username, firstname, lastname, email, hashedPassword, role]
+    );
+    res.status(201).json({
+      id: result.insertId,
+      username,
+      firstname,
+      lastname,
+      email,
+      role,
+      message: "User created successfully"
+    });
+  } catch (error) {
+    console.error(error);
+    if (error.code === "ER_DUP_ENTRY") {
+      res.status(400).json({ error: "Username or email already taken" });
+    } else {
+      res.status(500).json({ error: "User creation failed" });
+    }
+  }
+});
+
+// PUT /api/admin/users/:id/role - Change user role (admin only)
+app.put("/api/admin/users/:id/role", authenticateToken, requireAdmin, async (req, res) => {
+  const { role } = req.body;
+  const userId = req.params.id;
+
+  if (!['user', 'manager', 'admin'].includes(role)) {
+    return res.status(400).json({ error: "Invalid role" });
+  }
+
+  try {
+    const [result] = await pool.query(
+      "UPDATE Users SET role = ? WHERE id = ?",
+      [role, userId]
+    );
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ message: "User role updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Role update failed" });
+  }
+});
+
+// DELETE /api/admin/users/:id - Delete user (admin only)
+app.delete("/api/admin/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+  const userId = req.params.id;
+
+  // Prevent admin from deleting themselves
+  if (parseInt(userId) === req.user.id) {
+    return res.status(400).json({ error: "Cannot delete your own account" });
+  }
+
+  try {
+    const [result] = await pool.query("DELETE FROM Users WHERE id = ?", [userId]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "User deletion failed" });
+  }
+});
+
+// GET /api/admin/all-transactions - View all transactions (admin only)
+app.get("/api/admin/all-transactions", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+         t.id,
+         t.product_name,
+         t.quantity,
+         t.unit_price,
+         t.total_price,
+         t.transaction_date,
+         u.username as user_username
+       FROM Transactions t
+       LEFT JOIN Users u ON t.user_id = u.id
+       ORDER BY t.transaction_date DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch all transactions" });
+  }
+});
+
+// Manager APIs
+
+// GET /api/manager/inventory - View all inventory (manager/admin only)
+app.get("/api/manager/inventory", authenticateToken, requireManager, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM Inventory ORDER BY product_name"
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch inventory" });
+  }
+});
+
+// GET /api/manager/transactions - View all transactions (manager/admin only)
+app.get("/api/manager/transactions", authenticateToken, requireManager, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+         t.id,
+         t.product_name,
+         t.quantity,
+         t.unit_price,
+         t.total_price,
+         t.transaction_date,
+         u.username as user_username
+       FROM Transactions t
+       LEFT JOIN Users u ON t.user_id = u.id
+       ORDER BY t.transaction_date DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch all transactions" });
+  }
+});
+
+// GET /api/manager/reports - Sales reports (manager/admin only)
+app.get("/api/manager/reports", authenticateToken, requireManager, async (req, res) => {
+  try {
+    // Total sales by product
+    const [productSales] = await pool.query(
+      `SELECT
+         product_name,
+         SUM(quantity) as total_quantity_sold,
+         SUM(total_price) as total_revenue
+       FROM Transactions
+       GROUP BY product_name
+       ORDER BY total_revenue DESC`
+    );
+
+    // Daily sales summary
+    const [dailySales] = await pool.query(
+      `SELECT
+         DATE(transaction_date) as date,
+         COUNT(*) as total_transactions,
+         SUM(total_price) as daily_revenue
+       FROM Transactions
+       GROUP BY DATE(transaction_date)
+       ORDER BY date DESC
+       LIMIT 30`
+    );
+
+    // Current inventory value
+    const [inventoryValue] = await pool.query(
+      `SELECT
+         SUM(quantity * price) as total_inventory_value,
+         COUNT(*) as total_products
+       FROM Inventory`
+    );
+
+    res.json({
+      productSales,
+      dailySales,
+      inventorySummary: inventoryValue[0]
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to generate reports" });
   }
 });
 
