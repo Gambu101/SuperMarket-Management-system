@@ -1,5 +1,8 @@
 # Environment variables (contains sensitive info)
 .env
+**/.env
+# Explicitly exclude server .env
+server/.env
 
 # Node modules
 node_modules/
