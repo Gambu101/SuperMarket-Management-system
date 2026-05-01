@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import "./SignUp.css";
 import BackButton from "../../components/BackButton";
-import { useNavigate } from 'react-router'; // Import useNavigate
+import { useNavigate } from 'react-router-dom';
 
 function SignUp() {
   const navigate = useNavigate();
