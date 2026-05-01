@@ -67,6 +67,24 @@ function requireManager(req, res, next) {
   next();
 }
 
+// Middleware to authenticate JWT token
+const authenticateToken = async (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: "Token required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(403).json({ error: "Invalid token" });
+  }
+};
+
 // API endpoint to sign in
 app.post("/api/signin", async (req, res) => {
   const { email, password } = req.body;
@@ -81,8 +99,8 @@ app.post("/api/signin", async (req, res) => {
     if (!isValidPassword) {
       return res.status(401).json({ error: "⚠ Invalid email or password" });
     }
-    const token = jwt.sign(
-      { userId: user[0].id, role: user[0].role },
+const token = jwt.sign(
+      { id: user[0].id, role: user[0].role },
       process.env.SECRET_KEY,
       { expiresIn: "2h" }
     );
