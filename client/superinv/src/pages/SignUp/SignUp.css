@@ -33,9 +33,26 @@
     border-radius: 30px;
     cursor: pointer;
     justify-self: center;
-
+    width: 100%;
+    margin-top: 10px;
   }
 
   button[type="submit"]:hover {
     background-color: #45a049;
+  }
+
+  .error {
+    color: red;
+    background-color: #ffeeee;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+
+  .success {
+    color: green;
+    background-color: #eeffee;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
   }
