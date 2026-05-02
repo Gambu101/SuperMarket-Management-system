@@ -13,6 +13,7 @@ function SignUp() {
     email: "",
     password: "",
     confirmPassword: "",
+    role: "user",
   });
 
   const [error, setError] = useState(null);
@@ -36,7 +37,8 @@ function SignUp() {
         !formData.firstname ||
         !formData.lastname ||
         !formData.email ||
-        !formData.password
+        !formData.password ||
+        !formData.role
       ) {
         setError("Please fill in all fields");
         return;
@@ -137,6 +139,20 @@ function SignUp() {
               placeholder="confirm password"
               required
             />
+          </div>
+          <div className="form-group">
+            <label htmlFor="role">Role:</label>
+            <select
+              id="role"
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              required
+            >
+              <option value="user">User</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </select>
           </div>
           <button type="submit">Sign Up</button>
         </form>
