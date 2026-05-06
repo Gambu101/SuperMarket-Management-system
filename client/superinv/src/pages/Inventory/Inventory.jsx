@@ -13,7 +13,11 @@ const Inventory = () => {
     category: "",
     low_stock_threshold: "",
   });
-  const [search, setSearch] = useState({ name: "", category: "", priceMax: "" });
+  const [search, setSearch] = useState({
+    name: "",
+    category: "",
+    priceMax: "",
+  });
   const [editingId, setEditingId] = useState(null);
   const [toast, setToast] = useState({ msg: "", type: "" });
   const [globalDefaultThreshold, setGlobalDefaultThreshold] = useState(() => {
@@ -21,6 +25,24 @@ const Inventory = () => {
     return saved ? Number(saved) : 10;
   });
   const token = localStorage.getItem("token");
+  const [role, setRole] = useState(null);
+
+  useEffect(() => {
+    const fetchRole = async () => {
+      try {
+        if (!token) return;
+        const { data } = await axios.get("/api/user", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setRole(data?.role);
+      } catch {
+        setRole(null);
+      }
+    };
+    fetchRole();
+  }, [token]);
+
+  const isAdmin = role === "admin";
 
   // === Toast ===
   const showToast = (msg, type = "error") => {
@@ -36,7 +58,10 @@ const Inventory = () => {
   // === Set form default when global changes (only for new items) ===
   useEffect(() => {
     if (!editingId) {
-      setForm((prev) => ({ ...prev, low_stock_threshold: globalDefaultThreshold }));
+      setForm((prev) => ({
+        ...prev,
+        low_stock_threshold: globalDefaultThreshold,
+      }));
     }
   }, [globalDefaultThreshold, editingId]);
 
@@ -53,12 +78,12 @@ const Inventory = () => {
           if (item.quantity <= item.low_stock_threshold) {
             showToast(
               `${item.product_name}: Only ${item.quantity} left! (Alert: ${item.low_stock_threshold})`,
-              "warning"
+              "warning",
             );
           }
         });
       } catch (err) {
-        showToast(err,"Failed to load inventory");
+        showToast(err, "Failed to load inventory");
       }
     };
     fetch();
@@ -67,9 +92,14 @@ const Inventory = () => {
   // === Filter ===
   const filtered = useMemo(() => {
     return inventory.filter((item) => {
-      const nameOk = !search.name || item.product_name.toLowerCase().includes(search.name.toLowerCase());
-      const catOk = !search.category || item.category.toLowerCase().includes(search.category.toLowerCase());
-      const priceOk = search.priceMax === "" || item.price <= Number(search.priceMax);
+      const nameOk =
+        !search.name ||
+        item.product_name.toLowerCase().includes(search.name.toLowerCase());
+      const catOk =
+        !search.category ||
+        item.category.toLowerCase().includes(search.category.toLowerCase());
+      const priceOk =
+        search.priceMax === "" || item.price <= Number(search.priceMax);
       return nameOk && catOk && priceOk;
     });
   }, [inventory, search]);
@@ -109,7 +139,13 @@ const Inventory = () => {
       low_stock_threshold,
     } = form;
 
-    if (!product_name || !quantity || !price || !category || low_stock_threshold === "") {
+    if (
+      !product_name ||
+      !quantity ||
+      !price ||
+      !category ||
+      low_stock_threshold === ""
+    ) {
       showToast("Fill all required fields");
       return;
     }
@@ -129,9 +165,13 @@ const Inventory = () => {
 
       let newItem;
       if (editingId) {
-        const { data } = await axios.put(`/api/inventory/${editingId}`, payload, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const { data } = await axios.put(
+          `/api/inventory/${editingId}`,
+          payload,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
         newItem = data;
       } else {
         const { data } = await axios.post("/api/inventory", payload, {
@@ -141,15 +181,15 @@ const Inventory = () => {
       }
 
       setInventory((prev) =>
-        prev.map((i) => (i.id === newItem.id ? newItem : i)).concat(
-          prev.some((i) => i.id === newItem.id) ? [] : [newItem]
-        )
+        prev
+          .map((i) => (i.id === newItem.id ? newItem : i))
+          .concat(prev.some((i) => i.id === newItem.id) ? [] : [newItem]),
       );
 
       if (newItem.quantity <= newItem.low_stock_threshold) {
         showToast(
           `${newItem.product_name}: Only ${newItem.quantity} left! (Alert: ${newItem.low_stock_threshold})`,
-          "warning"
+          "warning",
         );
       } else {
         showToast(editingId ? "Updated!" : "Added/Restocked!", "success");
@@ -183,7 +223,7 @@ const Inventory = () => {
       setInventory((prev) => prev.filter((i) => i.id !== id));
       showToast("Deleted", "success");
     } catch (err) {
-      showToast(err,"Delete failed");
+      showToast(err, "Delete failed");
     }
   };
 
@@ -202,7 +242,9 @@ const Inventory = () => {
               type="number"
               min="0"
               value={globalDefaultThreshold}
-              onChange={(e) => setGlobalDefaultThreshold(Number(e.target.value) || 0)}
+              onChange={(e) =>
+                setGlobalDefaultThreshold(Number(e.target.value) || 0)
+              }
               className="threshold-input"
             />
           </label>
@@ -214,8 +256,18 @@ const Inventory = () => {
         {/* Left: Table */}
         <div className="inventory-table-section">
           <div className="search-bar">
-            <input name="name" placeholder="Name..." value={search.name} onChange={handleSearch} />
-            <input name="category" placeholder="Category..." value={search.category} onChange={handleSearch} />
+            <input
+              name="name"
+              placeholder="Name..."
+              value={search.name}
+              onChange={handleSearch}
+            />
+            <input
+              name="category"
+              placeholder="Category..."
+              value={search.category}
+              onChange={handleSearch}
+            />
             <input
               name="priceMax"
               type="number"
@@ -248,18 +300,40 @@ const Inventory = () => {
                         {item.product_name}
                         {isLow && <span className="low-stock-badge">LOW</span>}
                       </td>
-                      <td>{(item.product_description || "").slice(0, 20)}...</td>
-                      <td className={isLow ? "low-stock-qty" : ""}>{item.quantity}</td>
+                      <td>
+                        {(item.product_description || "").slice(0, 20)}...
+                      </td>
+                      <td className={isLow ? "low-stock-qty" : ""}>
+                        {item.quantity}
+                      </td>
                       <td>₦{Number(item.price).toFixed(2)}</td>
                       <td>{item.category}</td>
                       <td>
-                        <span className={isLow ? "alert-level low" : "alert-level"}>
+                        <span
+                          className={isLow ? "alert-level low" : "alert-level"}
+                        >
                           {item.low_stock_threshold}
                         </span>
                       </td>
                       <td>
-                        <button onClick={() => startEdit(item)} className="edit-btn">Edit</button>
-                        <button onClick={() => handleDelete(item.id)} className="delete-btn">Delete</button>
+                        {isAdmin ? (
+                          <>
+                            <button
+                              onClick={() => startEdit(item)}
+                              className="edit-btn"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="delete-btn"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        ) : (
+                          <span style={{ opacity: 0.7 }}>Read-only</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -276,23 +350,52 @@ const Inventory = () => {
             <div className="form-grid">
               <label>
                 Product Name*
-                <input name="product_name" value={form.product_name} onChange={handleChange} required />
+                <input
+                  name="product_name"
+                  value={form.product_name}
+                  onChange={handleChange}
+                  required
+                />
               </label>
               <label>
                 Description
-                <textarea name="product_description" value={form.product_description} onChange={handleChange} />
+                <textarea
+                  name="product_description"
+                  value={form.product_description}
+                  onChange={handleChange}
+                />
               </label>
               <label>
                 Quantity*
-                <input name="quantity" type="number" min="0" value={form.quantity} onChange={handleChange} required />
+                <input
+                  name="quantity"
+                  type="number"
+                  min="0"
+                  value={form.quantity}
+                  onChange={handleChange}
+                  required
+                />
               </label>
               <label>
                 Price*
-                <input name="price" type="number" step="0.01" min="0" value={form.price} onChange={handleChange} required />
+                <input
+                  name="price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.price}
+                  onChange={handleChange}
+                  required
+                />
               </label>
               <label>
                 Category*
-                <input name="category" value={form.category} onChange={handleChange} required />
+                <input
+                  name="category"
+                  value={form.category}
+                  onChange={handleChange}
+                  required
+                />
               </label>
               <label>
                 Alert Level*
@@ -311,7 +414,11 @@ const Inventory = () => {
                 {editingId ? "Update" : "Add / Restock"}
               </button>
               {editingId && (
-                <button type="button" onClick={resetForm} className="cancel-btn">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="cancel-btn"
+                >
                   Cancel
                 </button>
               )}

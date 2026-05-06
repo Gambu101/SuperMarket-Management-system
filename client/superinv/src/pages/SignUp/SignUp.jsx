@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import "./SignUp.css";
 import BackButton from "../../components/BackButton";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
 
 function SignUp() {
   const navigate = useNavigate();
@@ -13,7 +13,8 @@ function SignUp() {
     email: "",
     password: "",
     confirmPassword: "",
-    role: "user",
+    // Frontend-supported roles only
+    role: "staff",
   });
 
   const [error, setError] = useState(null);
@@ -25,11 +26,10 @@ function SignUp() {
   };
 
   const handleSubmit = async (e) => {
-
     e.preventDefault();
     try {
       if (formData.password !== formData.confirmPassword) {
-        setError(window.alert("⚠ Passwords do not match"));
+        setError("⚠ Passwords do not match");
         return;
       }
       if (
@@ -37,8 +37,7 @@ function SignUp() {
         !formData.firstname ||
         !formData.lastname ||
         !formData.email ||
-        !formData.password ||
-        !formData.role
+        !formData.password
       ) {
         setError("Please fill in all fields");
         return;
@@ -46,14 +45,12 @@ function SignUp() {
       await axios.post("/api/signup", formData);
       setSuccess(true);
       setError(null);
-      window.alert('USER REGISTERED SUCCESSFULLY, PROCEED TO SIGN IN')
-      navigate ('/signin')
+      window.alert("USER REGISTERED SUCCESSFULLY, PROCEED TO SIGN IN");
+      navigate("/signin");
     } catch (error) {
       setError(error.response.data.error);
       setSuccess(false);
     }
-    
-    
   };
 
   return (
@@ -140,6 +137,7 @@ function SignUp() {
               required
             />
           </div>
+
           <div className="form-group">
             <label htmlFor="role">Role:</label>
             <select
@@ -149,11 +147,11 @@ function SignUp() {
               onChange={handleChange}
               required
             >
-              <option value="user">User</option>
-              <option value="manager">Manager</option>
               <option value="admin">Admin</option>
+              <option value="staff">Staff</option>
             </select>
           </div>
+
           <button type="submit">Sign Up</button>
         </form>
       </div>
